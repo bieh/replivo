@@ -6,7 +6,7 @@ from ..extensions import db
 
 try:
     from pgvector.sqlalchemy import Vector
-except ImportError:
+except Exception:
     Vector = None
 
 
@@ -68,7 +68,6 @@ class DocumentChunk(db.Model):
     search_vector = db.Column(TSVector(), nullable=True)
 
 
-# Add embedding column only when pgvector is available
 if Vector:
     DocumentChunk.embedding = db.Column(Vector(1536), nullable=True)
 
