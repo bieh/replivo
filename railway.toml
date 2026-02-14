@@ -3,7 +3,7 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "echo 'Starting app...' && python -c 'from app import create_app; print(\"App imports OK\")' && echo 'Running migrations...' && flask db upgrade && echo 'Migrations done, starting gunicorn...' && gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --log-level info --preload"
+startCommand = "echo 'Starting gunicorn directly...' && gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --log-level debug --timeout 120"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
