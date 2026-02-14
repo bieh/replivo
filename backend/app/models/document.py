@@ -1,9 +1,13 @@
 import uuid
 from datetime import datetime, timezone
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import text
 from sqlalchemy.types import UserDefinedType
 from ..extensions import db
+
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
 
 
 class TSVector(UserDefinedType):
@@ -61,8 +65,12 @@ class DocumentChunk(db.Model):
     section_number = db.Column(db.String(50), nullable=True)
     page_number = db.Column(db.Integer, nullable=True)
     token_count = db.Column(db.Integer, default=0)
-    embedding = db.Column(Vector(1536), nullable=True)
     search_vector = db.Column(TSVector(), nullable=True)
+
+
+# Add embedding column only when pgvector is available
+if Vector:
+    DocumentChunk.embedding = db.Column(Vector(1536), nullable=True)
 
     __table_args__ = (
         db.Index('ix_chunk_search_vector', 'search_vector', postgresql_using='gin'),
