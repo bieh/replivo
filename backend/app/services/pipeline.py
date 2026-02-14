@@ -190,80 +190,18 @@ def process_inbound_email(email_data: dict) -> dict:
     message_id = email_data.get('message_id')
     thread_id = email_data.get('thread_id')
 
-    # Find tenant by email across all communities
+    # Find tenant and community
     tenant = Tenant.query.filter_by(email=sender_email, is_active=True).first()
 
-    if not tenant:
+    if tenant:
+        community = tenant.community
+    else:
         # Unknown sender — find community by inbox email, fall back to first
         community = Community.query.filter_by(inbox_email=to_email).first()
         if not community:
             community = Community.query.first()
-
         if not community:
             return {'status': 'error', 'error': 'No community found'}
-
-        conv = Conversation(
-            community_id=community.id,
-            tenant_id=None,
-            agentmail_thread_id=thread_id,
-            subject=subject,
-            status='pending_review',
-            sender_email=sender_email,
-        )
-        db.session.add(conv)
-        db.session.flush()
-
-        msg = Message(
-            conversation_id=conv.id,
-            agentmail_message_id=message_id,
-            direction='inbound',
-            from_email=sender_email,
-            to_email=to_email,
-            subject=subject,
-            body_text=body,
-        )
-        db.session.add(msg)
-        db.session.flush()
-
-        # Run AI pipeline even for unknown senders
-        result = process_question(community.id, body)
-
-        draft_msg = Message(
-            conversation_id=conv.id,
-            direction='outbound',
-            from_email=to_email,
-            to_email=sender_email,
-            subject=f"Re: {subject}",
-            body_text=result['answer_text'],
-            citations=result['citations'],
-            ai_response_data=result['raw_response'],
-            is_ai_generated=True,
-        )
-        db.session.add(draft_msg)
-
-        conv.status = result['status']
-
-        # Auto-reply for unknown senders too
-        settings = community.settings or {}
-        auto_reply = settings.get('auto_reply_enabled', False)
-        if auto_reply and result['status'] == 'draft_ready':
-            try:
-                from .email_service import send_reply
-                token = uuid.uuid4().hex[:12]
-                draft_msg.citation_token = token
-                from ..config import Config
-                citation_url = f"{Config.FRONTEND_URL.rstrip('/')}/citations/{token}"
-                send_reply(conv, result['answer_text'], citation_url=citation_url)
-                conv.status = 'auto_replied'
-                draft_msg.sent_at = datetime.now(timezone.utc)
-            except Exception as e:
-                print(f"  Auto-reply failed: {e}, keeping as draft_ready")
-
-        db.session.commit()
-
-        return {'status': conv.status, 'conversation_id': conv.id, 'answer_text': result['answer_text']}
-
-    community = tenant.community
 
     # Check for existing conversation on this thread
     existing_conv = None
@@ -298,7 +236,7 @@ def process_inbound_email(email_data: dict) -> dict:
         # Create new conversation
         conv = Conversation(
             community_id=community.id,
-            tenant_id=tenant.id,
+            tenant_id=tenant.id if tenant else None,
             agentmail_thread_id=thread_id,
             subject=subject,
             status='pending_review',
@@ -320,7 +258,7 @@ def process_inbound_email(email_data: dict) -> dict:
         db.session.add(inbound_msg)
         db.session.flush()
 
-        # Run AI pipeline (no history for new conversations)
+        # Run AI pipeline
         result = process_question(community.id, body, sender_email)
 
     # Store AI draft as outbound message
@@ -344,13 +282,11 @@ def process_inbound_email(email_data: dict) -> dict:
     auto_reply = settings.get('auto_reply_enabled', False)
 
     if auto_reply and result['status'] == 'draft_ready':
-        # Send reply automatically with citation link
         try:
             from .email_service import send_reply
+            from ..config import Config
             token = uuid.uuid4().hex[:12]
             draft_msg.citation_token = token
-            # Build citation URL from community inbox or fallback
-            from ..config import Config
             citation_url = f"{Config.FRONTEND_URL.rstrip('/')}/citations/{token}"
             send_reply(conv, result['answer_text'], citation_url=citation_url)
             conv.status = 'auto_replied'
