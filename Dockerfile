@@ -13,6 +13,9 @@ COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend/ backend/
+COPY cli/ cli/
+COPY tests/ tests/
+COPY samples/ samples/
 COPY --from=frontend /app/frontend/dist frontend/dist
 
 RUN chmod +x /app/backend/start.sh
