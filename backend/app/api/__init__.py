@@ -1,4 +1,11 @@
+from flask import jsonify
+
+
 def register_blueprints(app):
+    @app.route('/api/health')
+    def health():
+        return jsonify({'status': 'ok'})
+
     from .auth import bp as auth_bp
     from .communities import bp as communities_bp
     from .tenants import bp as tenants_bp
