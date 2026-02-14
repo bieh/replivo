@@ -31,9 +31,10 @@ def agentmail_webhook():
             return jsonify({'error': 'Invalid signature'}), 401
 
     payload = request.get_json()
+    print(f"  Webhook received: event_type={payload.get('event_type')}", flush=True)
 
-    # AgentMail webhook payload has the message at top level or under "data"
-    msg = payload.get('data', payload)
+    # AgentMail webhook: message is under "message" key
+    msg = payload.get('message') or payload.get('data') or payload
 
     from_raw = msg.get('from', '') or ''
     from_email = _parse_email(from_raw)
@@ -60,6 +61,8 @@ def agentmail_webhook():
                 body = detail.get('text') or detail.get('extracted_text') or detail.get('preview') or ''
         except Exception as e:
             current_app.logger.error(f"Failed to fetch message body: {e}")
+
+    print(f"  Webhook: from={from_email}, to={to_email}, subject={msg.get('subject', '')}, body_len={len(body)}", flush=True)
 
     if not body:
         return jsonify({'ok': True, 'skipped': 'no body'})
