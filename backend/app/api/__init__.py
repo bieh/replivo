@@ -65,8 +65,67 @@ def register_blueprints(app):
         docs = Document.query.all()
         return jsonify([{
             'id': d.id, 'filename': d.filename, 'status': d.status,
+            'community_id': d.community_id,
             'chunks': DocumentChunk.query.filter_by(document_id=d.id).count(),
         } for d in docs])
+
+    @app.route('/api/admin/orgs', methods=['GET'])
+    def admin_list_orgs():
+        """List all organizations with communities and doc counts."""
+        from flask import request as req
+        if not _check_admin(req):
+            return jsonify({'error': 'unauthorized'}), 403
+
+        from ..models import Organization, Community, Document, DocumentChunk
+        orgs = Organization.query.all()
+        result = []
+        for org in orgs:
+            communities = Community.query.filter_by(organization_id=org.id).all()
+            comms = []
+            for c in communities:
+                docs = Document.query.filter_by(community_id=c.id).all()
+                comms.append({
+                    'id': c.id, 'name': c.name,
+                    'docs': [{'id': d.id, 'filename': d.filename,
+                              'chunks': DocumentChunk.query.filter_by(document_id=d.id).count()}
+                             for d in docs],
+                })
+            result.append({'id': org.id, 'name': org.name, 'communities': comms})
+        return jsonify(result)
+
+    @app.route('/api/admin/orgs/<org_id>', methods=['DELETE'])
+    def admin_delete_org(org_id):
+        """Delete an organization and all its cascaded data."""
+        from flask import request as req
+        if not _check_admin(req):
+            return jsonify({'error': 'unauthorized'}), 403
+
+        from ..extensions import db
+        from ..models import Organization, Community, Document, DocumentChunk, \
+            Conversation, Message, Tenant
+
+        org = Organization.query.get(org_id)
+        if not org:
+            return jsonify({'error': 'not found'}), 404
+
+        communities = Community.query.filter_by(organization_id=org.id).all()
+        deleted = {'communities': 0, 'documents': 0, 'chunks': 0,
+                   'conversations': 0, 'messages': 0, 'tenants': 0}
+        for c in communities:
+            for conv in Conversation.query.filter_by(community_id=c.id).all():
+                deleted['messages'] += Message.query.filter_by(conversation_id=conv.id).delete()
+                db.session.delete(conv)
+                deleted['conversations'] += 1
+            for doc in Document.query.filter_by(community_id=c.id).all():
+                deleted['chunks'] += DocumentChunk.query.filter_by(document_id=doc.id).delete()
+                db.session.delete(doc)
+                deleted['documents'] += 1
+            deleted['tenants'] += Tenant.query.filter_by(community_id=c.id).delete()
+            db.session.delete(c)
+            deleted['communities'] += 1
+        db.session.delete(org)
+        db.session.commit()
+        return jsonify({'deleted_org': org.name, **deleted})
 
     from .auth import bp as auth_bp
     from .communities import bp as communities_bp
