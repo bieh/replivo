@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getCommunities, playgroundAsk } from '../api/client';
 import type { Community, Citation } from '../types';
