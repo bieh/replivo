@@ -16,4 +16,4 @@ COPY backend/ backend/
 COPY --from=frontend /app/frontend/dist frontend/dist
 
 WORKDIR /app/backend
-CMD ["sh", "-c", "flask db upgrade && gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2"]
+CMD ["sh", "-c", "echo Starting... PORT=$PORT && flask db upgrade 2>&1 && echo Migrations done && gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --log-level info 2>&1"]
