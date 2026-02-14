@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import PdfViewer from './PdfViewer';
 
 interface CitationEntry {
@@ -18,6 +19,34 @@ interface CitationEntry {
 interface CitationTabPanelProps {
   citation: CitationEntry;
 }
+
+function ChunkContentExpander({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border-t border-gray-100 pt-4">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-xs font-medium text-gray-500 uppercase tracking-wide hover:text-gray-700 transition-colors w-full"
+      >
+        <svg
+          className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        Document Text
+      </button>
+      {expanded && (
+        <div className="mt-2 bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{content}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default function CitationTabPanel({ citation }: CitationTabPanelProps) {
   const cit = citation;
@@ -101,16 +130,6 @@ export default function CitationTabPanel({ citation }: CitationTabPanelProps) {
           <p className="text-sm text-gray-800 leading-relaxed">{cit.claim_text}</p>
         </div>
 
-        {/* Chunk content */}
-        {cit.chunk_content && (
-          <div>
-            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Document Text</div>
-            <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{cit.chunk_content}</p>
-            </div>
-          </div>
-        )}
-
         {/* Source quote */}
         {cit.source_quote && (
           <div>
@@ -120,6 +139,9 @@ export default function CitationTabPanel({ citation }: CitationTabPanelProps) {
             </blockquote>
           </div>
         )}
+
+        {/* Chunk content — collapsed by default */}
+        {cit.chunk_content && <ChunkContentExpander content={cit.chunk_content} />}
       </div>
     </div>
   );

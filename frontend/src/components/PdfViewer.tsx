@@ -17,7 +17,13 @@ interface PdfViewerProps {
 const PAGE_WIDTH = 700;
 
 function normalizeText(text: string): string {
-  return text.replace(/\s+/g, ' ').trim().toLowerCase();
+  return text
+    .replace(/[\u201c\u201d\u201e\u00ab\u00bb]/g, '"')
+    .replace(/[\u2018\u2019\u201a]/g, "'")
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 export default function PdfViewer({ url, pageNumber, highlightText }: PdfViewerProps) {
