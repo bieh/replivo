@@ -15,5 +15,6 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ backend/
 COPY --from=frontend /app/frontend/dist frontend/dist
 
+RUN chmod +x /app/backend/start.sh
 WORKDIR /app/backend
-CMD ["sh", "-c", "echo Starting... PORT=$PORT && flask db upgrade 2>&1 && echo Migrations done && gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --log-level info 2>&1"]
+CMD ["/app/backend/start.sh"]
