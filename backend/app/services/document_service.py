@@ -212,11 +212,20 @@ def chunk_generic(full_text: str, pages_text: list[str]) -> list[dict]:
     chunks = []
     paragraphs = re.split(r'\n\n+', full_text)
     current_chunk = ''
+    current_chunk_start = 0
+    char_pos = 0
 
     for para in paragraphs:
         para = para.strip()
         if not para:
+            # Track position past the empty split
+            char_pos = full_text.find(para, char_pos) + len(para) if para else char_pos + 2
             continue
+
+        para_start = full_text.find(para, char_pos)
+        if para_start == -1:
+            para_start = char_pos
+
         test = current_chunk + '\n\n' + para if current_chunk else para
         if count_tokens(test) > 512 and current_chunk:
             chunks.append({
@@ -225,11 +234,16 @@ def chunk_generic(full_text: str, pages_text: list[str]) -> list[dict]:
                 'article_title': '',
                 'section_group': '',
                 'section_number': '',
-                'page_number': None,
+                'page_number': _estimate_page(current_chunk_start, full_text, pages_text),
             })
             current_chunk = para
+            current_chunk_start = para_start
         else:
+            if not current_chunk:
+                current_chunk_start = para_start
             current_chunk = test
+
+        char_pos = para_start + len(para)
 
     if current_chunk:
         chunks.append({
@@ -238,14 +252,27 @@ def chunk_generic(full_text: str, pages_text: list[str]) -> list[dict]:
             'article_title': '',
             'section_group': '',
             'section_number': '',
-            'page_number': None,
+            'page_number': _estimate_page(current_chunk_start, full_text, pages_text),
         })
 
     return chunks
 
 
+def _find_page(content: str, pages_text: list[str]) -> Optional[int]:
+    """Find which PDF page contains the start of this chunk content."""
+    for length in (100, 60, 30):
+        snippet = content[:length].strip()
+        if not snippet:
+            continue
+        for i, page in enumerate(pages_text):
+            cleaned_page = clean_text(page)
+            if snippet in cleaned_page:
+                return i + 1
+    return None
+
+
 def _estimate_page(char_pos: int, full_text: str, pages_text: list[str]) -> Optional[int]:
-    """Estimate which page a character position falls on."""
+    """Estimate which page a character position falls on (legacy fallback)."""
     running = 0
     for i, page in enumerate(pages_text):
         running += len(page) + 2  # +2 for the \n\n join
@@ -284,6 +311,15 @@ def _enforce_chunk_limits(chunks: list[dict], max_tokens: int = 512, min_tokens:
     return result
 
 
+def _assign_page_numbers(chunks_data: list[dict], pages_text: list[str]) -> list[dict]:
+    """Assign accurate page numbers to chunks by matching content to PDF pages."""
+    for chunk in chunks_data:
+        page = _find_page(chunk['content'], pages_text)
+        if page is not None:
+            chunk['page_number'] = page
+    return chunks_data
+
+
 def ingest_document(community_id: str, filepath: str) -> Document:
     """Full ingestion pipeline: parse → chunk → embed → store."""
     filename = os.path.basename(filepath)
@@ -309,6 +345,9 @@ def ingest_document(community_id: str, filepath: str) -> Document:
         chunks_data = chunk_gleneagle(full_text, pages_text)
     else:
         chunks_data = chunk_generic(full_text, pages_text)
+
+    # Assign accurate page numbers from PDF pages
+    chunks_data = _assign_page_numbers(chunks_data, pages_text)
 
     print(f"  Created {len(chunks_data)} chunks")
 
@@ -401,6 +440,9 @@ def process_document(doc_id: str):
             chunks_data = chunk_gleneagle(full_text, pages_text)
         else:
             chunks_data = chunk_generic(full_text, pages_text)
+
+        # Assign accurate page numbers from PDF pages
+        chunks_data = _assign_page_numbers(chunks_data, pages_text)
 
         texts = [c['content'] for c in chunks_data]
         embeddings = generate_embeddings_batch(texts)

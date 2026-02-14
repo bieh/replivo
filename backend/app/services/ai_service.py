@@ -32,7 +32,7 @@ CRITICAL RULES — FOLLOW THESE EXACTLY:
    - Set should_escalate to true
    - Present what the documents DO say, then note the ambiguity
 
-6. For the answer_text: write a professional, friendly email response. Include inline citations like "(Section 7.6)" after relevant statements. Address the tenant directly.
+6. For the answer_text: write a professional, friendly email response. Use numbered citations [1], [2], etc. after relevant statements. Number N corresponds to the Nth claim in your claims array (1-indexed). Keep section references in the claims array but use only the bracketed number in the answer text. Address the tenant directly.
 
 7. Think step-by-step in the "reasoning" field before answering. This helps you avoid mistakes.
 

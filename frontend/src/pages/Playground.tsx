@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getCommunities, playgroundAsk } from '../api/client';
 import type { Community, Citation } from '../types';
 import Markdown from '../components/Markdown';
+
+/** Replace [N] with markdown links to citation page anchors. */
+function linkifyCitations(text: string, citationUrl: string): string {
+  return text.replace(/\[(\d+)\]/g, (_, n) => `[[${n}]](${citationUrl}#cite-${n})`);
+}
 
 interface HistoryEntry {
   role: string;
@@ -155,18 +160,22 @@ export default function Playground() {
                   <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">Needs Human</span>
                 )}
               </div>
-              <Markdown>{result.answer_text}</Markdown>
+              <Markdown>{result.citation_url ? linkifyCitations(result.answer_text, result.citation_url) : result.answer_text}</Markdown>
             </div>
 
             {/* Citations */}
             {result.citations && result.citations.length > 0 && (
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-sm font-medium text-gray-900 mb-3">Citations</h3>
-                <ul className="space-y-3">
+                <div className="space-y-4">
                   {result.citations.map((cit: Citation, i: number) => (
-                    <li key={i} className="text-sm border-l-2 border-indigo-200 pl-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-indigo-700">{cit.section_reference}</span>
+                    <div key={i} className="border border-gray-200 rounded-lg p-4">
+                      {/* Header row */}
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
+                          {i + 1}
+                        </span>
+                        <span className="text-sm font-medium text-indigo-700">{cit.section_reference}</span>
                         {cit.verified ? (
                           <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Verified</span>
                         ) : (
@@ -175,14 +184,53 @@ export default function Playground() {
                         {cit.confidence && (
                           <span className="text-xs text-gray-400">{cit.confidence}</span>
                         )}
+                        {cit.page_number != null && (
+                          <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                            Page {cit.page_number}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-gray-600 mt-1">{cit.claim_text}</p>
-                      {cit.source_quote && (
-                        <p className="text-gray-400 mt-1 text-xs italic">"{cit.source_quote.substring(0, 200)}..."</p>
+
+                      {/* Document name + download */}
+                      {cit.document_name && (
+                        <div className="flex items-center gap-2 mb-2 text-sm text-gray-600">
+                          <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          <span className="truncate">{cit.document_name}</span>
+                          {cit.document_id && (
+                            <a
+                              href={`/api/documents/${cit.document_id}/download`}
+                              className="ml-auto inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium flex-shrink-0"
+                              download
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              Download
+                            </a>
+                          )}
+                        </div>
                       )}
-                    </li>
+
+                      <p className="text-sm text-gray-600 mb-2">{cit.claim_text}</p>
+
+                      {/* Chunk content */}
+                      {cit.chunk_content && (
+                        <div className="mb-2 bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+                          <div className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-1">Document Text</div>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{cit.chunk_content}</p>
+                        </div>
+                      )}
+
+                      {cit.source_quote && (
+                        <blockquote className="border-l-3 border-indigo-200 pl-3 text-sm text-gray-500 italic bg-gray-50 rounded-r p-3">
+                          &ldquo;{cit.source_quote}&rdquo;
+                        </blockquote>
+                      )}
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             )}
 

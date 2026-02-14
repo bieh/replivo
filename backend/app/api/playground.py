@@ -1,5 +1,8 @@
+import uuid
 from flask import Blueprint, request, jsonify, session
-from ..models import User
+from ..extensions import db
+from ..models import User, Message, Conversation
+from ..config import Config
 
 bp = Blueprint('playground', __name__)
 
@@ -31,4 +34,38 @@ def playground_ask():
     result = process_question(community_id, question,
                               conversation_history=conversation_history)
 
+    # Generate a citation token so playground answers have a linkable citation page
+    token = uuid.uuid4().hex[:12]
+    citation_url = f"{Config.FRONTEND_URL.rstrip('/')}/citations/{token}"
+
+    # Find or create a playground conversation to attach the message to
+    conv = Conversation.query.filter_by(
+        community_id=community_id, sender_email='playground'
+    ).first()
+    if not conv:
+        conv = Conversation(
+            community_id=community_id,
+            subject='Playground',
+            status='auto_replied',
+            sender_email='playground',
+        )
+        db.session.add(conv)
+        db.session.flush()
+
+    msg = Message(
+        conversation_id=conv.id,
+        direction='outbound',
+        from_email='playground',
+        to_email='playground',
+        subject=question[:200],
+        body_text=result['answer_text'],
+        citations=result['citations'],
+        ai_response_data=result['raw_response'],
+        is_ai_generated=True,
+        citation_token=token,
+    )
+    db.session.add(msg)
+    db.session.commit()
+
+    result['citation_url'] = citation_url
     return jsonify(result)

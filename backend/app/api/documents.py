@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, request, jsonify, session, current_app
+from flask import Blueprint, request, jsonify, session, current_app, send_file
 from ..extensions import db
 from ..models import Document, User
 
@@ -85,3 +85,36 @@ def delete_document(community_id, doc_id):
     db.session.delete(doc)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+def _resolve_doc_path(doc):
+    """Resolve the file path for a document, handling relative paths."""
+    file_path = doc.file_path
+    if not file_path:
+        return None
+    if not os.path.isabs(file_path):
+        file_path = os.path.join(current_app.root_path, '..', file_path)
+    file_path = os.path.abspath(file_path)
+    if not os.path.exists(file_path):
+        return None
+    return file_path
+
+
+@bp.route('/documents/<doc_id>/download', methods=['GET'])
+def download_document(doc_id):
+    """Public (unauthenticated) endpoint to download a document PDF."""
+    doc = Document.query.get_or_404(doc_id)
+    file_path = _resolve_doc_path(doc)
+    if not file_path:
+        return jsonify({'error': 'File not found'}), 404
+    return send_file(file_path, as_attachment=True, download_name=doc.filename)
+
+
+@bp.route('/documents/<doc_id>/view', methods=['GET'])
+def view_document(doc_id):
+    """Public endpoint to view a document inline (for PDF.js rendering)."""
+    doc = Document.query.get_or_404(doc_id)
+    file_path = _resolve_doc_path(doc)
+    if not file_path:
+        return jsonify({'error': 'File not found'}), 404
+    return send_file(file_path, mimetype='application/pdf', as_attachment=False)

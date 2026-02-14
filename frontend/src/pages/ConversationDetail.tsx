@@ -9,6 +9,10 @@ import type { Conversation, Message, Citation } from '../types';
 import StatusBadge from '../components/StatusBadge';
 import Markdown from '../components/Markdown';
 
+function linkifyCitations(text: string, citationUrl: string): string {
+  return text.replace(/\[(\d+)\]/g, (_, n) => `[[${n}]](${citationUrl}#cite-${n})`);
+}
+
 export default function ConversationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -228,24 +232,57 @@ export default function ConversationDetail() {
           {aiDraft?.citations && aiDraft.citations.length > 0 && (
             <div className="bg-white rounded-lg shadow p-4">
               <h3 className="text-sm font-medium text-gray-900 mb-3">Citations</h3>
-              <ul className="space-y-3">
+              <div className="space-y-3">
                 {aiDraft.citations.map((cit: Citation, i: number) => (
-                  <li key={i} className="text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-indigo-700">{cit.section_reference}</span>
+                  <div key={i} className="border border-gray-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
+                        {i + 1}
+                      </span>
+                      <span className="text-xs font-medium text-indigo-700">{cit.section_reference}</span>
                       {cit.verified ? (
                         <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Verified</span>
                       ) : (
                         <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Unverified</span>
                       )}
+                      {cit.page_number != null && (
+                        <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                          p.{cit.page_number}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-gray-600 mt-1">{cit.claim_text}</p>
-                    {cit.source_quote && (
-                      <p className="text-gray-400 mt-1 text-xs italic">"{cit.source_quote.substring(0, 150)}..."</p>
+                    {cit.document_name && (
+                      <div className="flex items-center gap-1.5 mb-2 text-xs text-gray-500">
+                        <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <span className="truncate">{cit.document_name}</span>
+                        {cit.document_id && (
+                          <a
+                            href={`/api/documents/${cit.document_id}/download`}
+                            className="ml-auto text-indigo-600 hover:text-indigo-800 font-medium flex-shrink-0"
+                            download
+                          >
+                            Download
+                          </a>
+                        )}
+                      </div>
                     )}
-                  </li>
+                    <p className="text-xs text-gray-600 mb-2">{cit.claim_text}</p>
+                    {cit.chunk_content && (
+                      <div className="mb-2 bg-indigo-50 border border-indigo-100 rounded p-2">
+                        <div className="text-[10px] font-medium text-indigo-500 uppercase tracking-wide mb-1">Document Text</div>
+                        <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed line-clamp-6">{cit.chunk_content}</p>
+                      </div>
+                    )}
+                    {cit.source_quote && (
+                      <blockquote className="border-l-2 border-indigo-200 pl-2 text-xs text-gray-400 italic">
+                        &ldquo;{cit.source_quote}&rdquo;
+                      </blockquote>
+                    )}
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
         </div>
@@ -256,6 +293,11 @@ export default function ConversationDetail() {
 
 function MessageBubble({ message }: { message: Message }) {
   const isInbound = message.direction === 'inbound';
+  const citationToken = message.citation_token;
+  const citationUrl = citationToken ? `/citations/${citationToken}` : null;
+  const bodyText = citationUrl
+    ? linkifyCitations(message.body_text, citationUrl)
+    : message.body_text;
 
   return (
     <div className={`bg-white rounded-lg shadow p-4 ${isInbound ? 'border-l-4 border-gray-300' : 'border-l-4 border-indigo-400'}`}>
@@ -271,7 +313,7 @@ function MessageBubble({ message }: { message: Message }) {
            message.created_at ? new Date(message.created_at).toLocaleString() : ''}
         </span>
       </div>
-      <Markdown>{message.body_text}</Markdown>
+      <Markdown>{bodyText}</Markdown>
     </div>
   );
 }

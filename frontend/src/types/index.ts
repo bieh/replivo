@@ -51,6 +51,11 @@ export interface Citation {
   source_quote: string;
   confidence: string;
   verified: boolean;
+  document_id?: string;
+  document_name?: string;
+  chunk_content?: string;
+  page_number?: number | null;
+  view_url?: string | null;
 }
 
 export interface Message {
@@ -65,6 +70,7 @@ export interface Message {
   citations: Citation[] | null;
   ai_response_data: any;
   is_ai_generated: boolean;
+  citation_token: string | null;
   sent_at: string | null;
   created_at: string;
 }

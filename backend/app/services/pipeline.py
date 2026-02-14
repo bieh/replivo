@@ -4,10 +4,84 @@ import uuid
 from datetime import datetime, timezone
 
 from ..extensions import db
-from ..models import Community, Tenant, Conversation, Message, Document
+from ..models import Community, Tenant, Conversation, Message, Document, DocumentChunk
 from .search_service import get_context_for_community
 from .ai_service import generate_response, verify_response
 from .citation_verifier import verify_citations, has_unverified_citations
+
+
+def _clean_quote(text: str) -> str:
+    """Strip smart/curly quotes and leading/trailing quotation marks."""
+    text = (text
+            .replace('\u201c', '').replace('\u201d', '')
+            .replace('\u2018', '').replace('\u2019', '')
+            .replace('\u00ab', '').replace('\u00bb', '')
+            .replace('\u2013', '-').replace('\u2014', '-'))
+    text = text.strip().strip('"\'').strip()
+    return text
+
+
+def _find_matching_chunk(community_id: str, section_ref: str, source_quote: str):
+    """Find the DocumentChunk matching a citation's section reference or quote.
+
+    Returns (DocumentChunk, Document) or (None, None).
+    """
+    docs = Document.query.filter_by(
+        community_id=community_id, status='ready'
+    ).all()
+    if not docs:
+        return None, None
+    doc_ids = [d.id for d in docs]
+
+    # Normalize section_ref: "Section 7.6" -> "7.6", "Article VIII" -> "VIII"
+    normalized = re.sub(r'(?i)^(section|article)\s*', '', section_ref).strip()
+
+    # Try matching by section_number
+    if normalized:
+        chunk = DocumentChunk.query.filter(
+            DocumentChunk.document_id.in_(doc_ids),
+            DocumentChunk.section_number.ilike(f'%{normalized}%')
+        ).first()
+        if chunk:
+            doc = Document.query.get(chunk.document_id)
+            return chunk, doc
+
+    # Extract numeric section patterns for content search
+    # e.g. "Article I, Section 137(b)" -> try "Section 137"
+    section_nums = re.findall(r'(?i)section\s*(\d+)', section_ref)
+
+    # Fallback: fuzzy match source_quote against chunk content
+    clean_quote = _clean_quote(source_quote) if source_quote else ''
+    if clean_quote and len(clean_quote) > 20:
+        # Try progressively shorter snippets (80, 50, 30 chars)
+        for length in (80, 50, 30):
+            snippet = clean_quote[:length].strip()
+            # Escape SQL LIKE wildcards
+            snippet = snippet.replace('%', r'\%').replace('_', r'\_')
+            chunks = DocumentChunk.query.filter(
+                DocumentChunk.document_id.in_(doc_ids),
+                DocumentChunk.content.ilike(f'%{snippet}%')
+            ).all()
+            if chunks:
+                doc = Document.query.get(chunks[0].document_id)
+                return chunks[0], doc
+
+    # Try matching section numbers in chunk content (e.g. "Section 137")
+    for num in section_nums:
+        chunk = DocumentChunk.query.filter(
+            DocumentChunk.document_id.in_(doc_ids),
+            DocumentChunk.content.ilike(f'%Section {num}%')
+        ).first()
+        if chunk:
+            doc = Document.query.get(chunk.document_id)
+            return chunk, doc
+
+    # Last resort: if only one document, return it with no specific chunk
+    # so we at least get the PDF viewer
+    if len(docs) == 1:
+        return None, docs[0]
+
+    return None, None
 
 
 def _parse_email(raw: str) -> str:
@@ -108,17 +182,28 @@ def process_question(community_id: str, question: str, tenant_email: str = None,
     if escalation_reason:
         print(f"  Escalation: {escalation_reason}")
 
-    # Build citations for storage
-    citations = [
-        {
+    # Build citations for storage (enriched with document/chunk data)
+    citations = []
+    for c in response.get('claims', []):
+        chunk, doc = _find_matching_chunk(
+            community_id,
+            c.get('section_reference', ''),
+            c.get('source_quote', ''),
+        )
+        cit = {
             'claim_text': c.get('claim_text', ''),
             'section_reference': c.get('section_reference', ''),
             'source_quote': c.get('source_quote', ''),
             'confidence': c.get('confidence', ''),
             'verified': c.get('citation_verified', False),
         }
-        for c in response.get('claims', [])
-    ]
+        if doc:
+            cit['document_id'] = doc.id
+            cit['document_name'] = doc.filename
+            if chunk:
+                cit['chunk_content'] = chunk.content
+                cit['page_number'] = chunk.page_number
+        citations.append(cit)
 
     return {
         'status': status,

@@ -1,4 +1,5 @@
 """AgentMail REST API wrapper for sending emails."""
+import re
 import requests
 import markdown
 from ..config import Config
@@ -25,6 +26,14 @@ def markdown_to_html(text: str) -> str:
 </html>"""
 
 
+def _linkify_citations(text: str, citation_url: str) -> str:
+    """Replace [N] patterns with markdown links to citation anchors."""
+    def replace_cite(m):
+        n = m.group(1)
+        return f"[[{n}]]({citation_url}#cite-{n})"
+    return re.sub(r'\[(\d+)\]', replace_cite, text)
+
+
 def send_reply(conversation, body_text: str, citation_url: str = None):
     """Send a reply via AgentMail REST API."""
     try:
@@ -32,7 +41,8 @@ def send_reply(conversation, body_text: str, citation_url: str = None):
 
         full_text = body_text
         if citation_url:
-            full_text += f"\n\n---\nSources and citations: {citation_url}"
+            full_text = _linkify_citations(full_text, citation_url)
+            full_text += f"\n\n---\n[View all sources]({citation_url})"
 
         html_body = markdown_to_html(full_text)
 
