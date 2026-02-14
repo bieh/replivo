@@ -9,7 +9,6 @@ alembic
 bcrypt
 openai
 cohere
-agentmail
 svix
 pdfplumber
 tiktoken
@@ -18,3 +17,5 @@ gunicorn
 pytest
 thefuzz
 python-Levenshtein
+markdown
+requests
