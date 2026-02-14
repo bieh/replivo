@@ -11,6 +11,8 @@ openai
 cohere
 svix
 pdfplumber
+pdf2image
+pytesseract
 tiktoken
 python-dotenv
 gunicorn
