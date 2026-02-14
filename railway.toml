@@ -3,7 +3,8 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "flask db upgrade && gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --log-level info --preload"
+startCommand = "echo 'Starting app...' && python -c 'from app import create_app; print(\"App imports OK\")' && echo 'Running migrations...' && flask db upgrade && echo 'Migrations done, starting gunicorn...' && gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --log-level info --preload"
 healthcheckPath = "/api/health"
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
