@@ -127,6 +127,25 @@ def register_blueprints(app):
         db.session.commit()
         return jsonify({'deleted_org': org.name, **deleted})
 
+    @app.route('/api/admin/communities/<community_id>', methods=['DELETE'])
+    def admin_delete_community(community_id):
+        """Delete a community and all its cascaded data."""
+        from flask import request as req
+        if not _check_admin(req):
+            return jsonify({'error': 'unauthorized'}), 403
+
+        from ..extensions import db
+        from ..models import Community
+
+        community = Community.query.get(community_id)
+        if not community:
+            return jsonify({'error': 'not found'}), 404
+
+        name = community.name
+        db.session.delete(community)
+        db.session.commit()
+        return jsonify({'deleted_community': name, 'status': 'ok'})
+
     from .auth import bp as auth_bp
     from .communities import bp as communities_bp
     from .tenants import bp as tenants_bp
