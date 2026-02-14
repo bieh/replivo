@@ -1,8 +1,17 @@
-"""Cohere rerank integration."""
-import cohere
+"""Cohere rerank integration (optional — falls back to truncation if no API key)."""
 from ..config import Config
 
-co = cohere.Client(api_key=Config.COHERE_API_KEY)
+_co = None
+
+
+def _get_client():
+    global _co
+    if _co is None:
+        if not Config.COHERE_API_KEY:
+            return None
+        import cohere
+        _co = cohere.Client(api_key=Config.COHERE_API_KEY)
+    return _co
 
 
 def rerank_chunks(query: str, chunks: list[dict], top_n: int = 8) -> list[dict]:
@@ -21,6 +30,10 @@ def rerank_chunks(query: str, chunks: list[dict], top_n: int = 8) -> list[dict]:
 
     if len(chunks) <= top_n:
         return chunks
+
+    co = _get_client()
+    if co is None:
+        return chunks[:top_n]
 
     try:
         response = co.rerank(
