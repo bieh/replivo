@@ -39,6 +39,9 @@ def create_app(config_class=Config):
         @app.route('/', defaults={'path': ''})
         @app.route('/<path:path>')
         def serve_frontend(path):
+            if path.startswith('api/'):
+                from flask import abort
+                abort(404)
             full = os.path.join(static_dir, path)
             if path and os.path.isfile(full):
                 return send_from_directory(static_dir, path)
