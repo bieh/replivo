@@ -11,7 +11,6 @@ import type { Community, Tenant, Document } from '../types';
 export default function CommunityDetail() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<'tenants' | 'documents' | 'settings'>('tenants');
-  const queryClient = useQueryClient();
 
   const { data: community } = useQuery<Community>({
     queryKey: ['community', id],

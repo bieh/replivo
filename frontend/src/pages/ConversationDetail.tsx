@@ -59,7 +59,6 @@ export default function ConversationDetail() {
   if (isLoading || !conv) return <div className="text-gray-500">Loading...</div>;
 
   const messages = conv.messages || [];
-  const inbound = messages.find((m) => m.direction === 'inbound');
   const aiDraft = [...messages].reverse().find((m) => m.direction === 'outbound' && m.is_ai_generated);
   const canApprove = conv.status === 'draft_ready' && aiDraft;
   const needsHuman = conv.status === 'needs_human';
