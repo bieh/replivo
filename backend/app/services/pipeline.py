@@ -242,6 +242,23 @@ def process_inbound_email(email_data: dict) -> dict:
         db.session.add(draft_msg)
 
         conv.status = result['status']
+
+        # Auto-reply for unknown senders too
+        settings = community.settings or {}
+        auto_reply = settings.get('auto_reply_enabled', False)
+        if auto_reply and result['status'] == 'draft_ready':
+            try:
+                from .email_service import send_reply
+                token = uuid.uuid4().hex[:12]
+                draft_msg.citation_token = token
+                from ..config import Config
+                citation_url = f"{Config.FRONTEND_URL.rstrip('/')}/citations/{token}"
+                send_reply(conv, result['answer_text'], citation_url=citation_url)
+                conv.status = 'auto_replied'
+                draft_msg.sent_at = datetime.now(timezone.utc)
+            except Exception as e:
+                print(f"  Auto-reply failed: {e}, keeping as draft_ready")
+
         db.session.commit()
 
         return {'status': conv.status, 'conversation_id': conv.id, 'answer_text': result['answer_text']}
